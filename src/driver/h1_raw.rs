@@ -230,7 +230,7 @@ impl H1RawConnection {
             remaining -= n;
             if tail_friendly {
                 chunks = chunks.wrapping_add(1);
-                if chunks % 4 == 0 {
+                if chunks.is_multiple_of(4) {
                     tokio::task::yield_now().await;
                 }
             }
@@ -268,7 +268,7 @@ impl H1RawConnection {
             self.consume(chunk_size + 2);
             if tail_friendly {
                 chunks = chunks.wrapping_add(1);
-                if chunks % 4 == 0 {
+                if chunks.is_multiple_of(4) {
                     tokio::task::yield_now().await;
                 }
             }
@@ -291,7 +291,7 @@ impl H1RawConnection {
             bytes_in += n as u64;
             if tail_friendly {
                 chunks = chunks.wrapping_add(1);
-                if chunks % 4 == 0 {
+                if chunks.is_multiple_of(4) {
                     tokio::task::yield_now().await;
                 }
             }

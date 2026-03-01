@@ -91,6 +91,7 @@ fn maybe_activate_pacer(
 
 /// Run the benchmark with one current-thread tokio runtime per worker thread.
 /// Returns per-worker metrics and the measured elapsed time.
+#[allow(clippy::too_many_arguments)]
 pub fn run_benchmark(
     factory: Arc<ConnectionFactory>,
     request_config: Arc<RequestConfig>,
@@ -211,6 +212,7 @@ pub fn run_benchmark(
     (all_metrics, measured_elapsed)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_worker_eventloop(
     factory: Arc<ConnectionFactory>,
     config: Arc<RequestConfig>,
@@ -546,7 +548,7 @@ async fn run_h3_client_actor(
                         true
                     } else {
                         ok_seq = ok_seq.wrapping_add(1);
-                        ok_seq % sample == 0
+                        ok_seq.is_multiple_of(sample)
                     };
                     metrics.record_success(
                         result.status,
@@ -810,11 +812,9 @@ async fn run_worker_loop(
                 measuring,
                 now,
             );
-            if measuring && !is_duration_mode {
-                if budget_remaining == 0 {
-                    budget_exhausted = true;
-                    continue;
-                }
+            if measuring && !is_duration_mode && budget_remaining == 0 {
+                budget_exhausted = true;
+                continue;
             }
 
             if measuring
@@ -901,7 +901,7 @@ async fn run_worker_loop(
                         true
                     } else {
                         ok_seq = ok_seq.wrapping_add(1);
-                        ok_seq % sample == 0
+                        ok_seq.is_multiple_of(sample)
                     };
                     worker_metrics.record_success(
                         result.status,

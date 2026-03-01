@@ -171,10 +171,10 @@ fn likely_isolated_container_network() -> bool {
 
     let mut non_loopback = 0usize;
     for entry in entries.flatten() {
-        if let Some(name) = entry.file_name().to_str() {
-            if name != "lo" {
-                non_loopback += 1;
-            }
+        if let Some(name) = entry.file_name().to_str()
+            && name != "lo"
+        {
+            non_loopback += 1;
         }
     }
 

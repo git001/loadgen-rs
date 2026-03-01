@@ -3,7 +3,9 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use hdrhistogram::Histogram;
-use hdrhistogram::serialization::{Deserializer as HistDeserializer, Serializer as _, V2DeflateSerializer};
+use hdrhistogram::serialization::{
+    Deserializer as HistDeserializer, Serializer as _, V2DeflateSerializer,
+};
 use serde::{Deserialize, Serialize};
 
 const STATUS_FASTPATH_MAX: usize = 600;
@@ -30,6 +32,12 @@ pub struct WorkerMetrics {
     pub status_counts_other: HashMap<u16, u64>,
     pub tls_protocol: Option<String>,
     pub tls_cipher: Option<String>,
+}
+
+impl Default for WorkerMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WorkerMetrics {
@@ -229,13 +237,18 @@ pub fn serialize_histogram_b64(hist: &Histogram<u64>) -> Option<String> {
     let mut buf = Vec::new();
     let mut serializer = V2DeflateSerializer::new();
     if serializer.serialize(hist, &mut buf).is_ok() {
-        Some(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buf))
+        Some(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &buf,
+        ))
     } else {
         None
     }
 }
 
 /// Decode a base64-encoded V2-Deflate histogram back into an HdrHistogram.
+/// Called via FFI from `loadgen-ffi` crate.
+#[allow(dead_code)]
 pub fn deserialize_histogram_b64(b64: &str) -> Result<Histogram<u64>, String> {
     let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64)
         .map_err(|e| format!("base64 decode error: {e}"))?;
@@ -246,6 +259,7 @@ pub fn deserialize_histogram_b64(b64: &str) -> Result<Histogram<u64>, String> {
 }
 
 /// Merge multiple worker metrics into a single RunReport.
+#[allow(clippy::too_many_arguments)]
 pub fn merge_metrics(
     workers: Vec<WorkerMetrics>,
     elapsed: Duration,
@@ -418,9 +432,21 @@ pub fn merge_metrics(
         err_timeout,
         err_http,
         elapsed_s,
-        latency_hist_b64: if export_histograms { serialize_histogram_b64(&latency) } else { None },
-        ttfb_hist_b64: if export_histograms { serialize_histogram_b64(&ttfb) } else { None },
-        connect_hist_b64: if export_histograms { serialize_histogram_b64(&connect) } else { None },
+        latency_hist_b64: if export_histograms {
+            serialize_histogram_b64(&latency)
+        } else {
+            None
+        },
+        ttfb_hist_b64: if export_histograms {
+            serialize_histogram_b64(&ttfb)
+        } else {
+            None
+        },
+        connect_hist_b64: if export_histograms {
+            serialize_histogram_b64(&connect)
+        } else {
+            None
+        },
     }
 }
 
@@ -430,6 +456,8 @@ pub fn merge_metrics(
 /// and the merged report's percentile fields are recomputed from the combined histogram.
 /// Counters are summed. `elapsed_s` is taken as max across workers.
 /// The returned report has `*_hist_b64: None` (merged percentiles are sufficient).
+/// Called via FFI from `loadgen-ffi` crate.
+#[allow(dead_code)]
 pub fn merge_distributed_reports(reports: Vec<RunReport>) -> Result<RunReport, String> {
     if reports.is_empty() {
         return Err("no reports to merge".to_string());
@@ -537,13 +565,33 @@ pub fn merge_distributed_reports(reports: Vec<RunReport>) -> Result<RunReport, S
         }
     }
 
-    let rps = if elapsed_s > 0.0 { requests_completed as f64 / elapsed_s } else { 0.0 };
-    let started_rps = if elapsed_s > 0.0 { requests_started as f64 / elapsed_s } else { 0.0 };
+    let rps = if elapsed_s > 0.0 {
+        requests_completed as f64 / elapsed_s
+    } else {
+        0.0
+    };
+    let started_rps = if elapsed_s > 0.0 {
+        requests_started as f64 / elapsed_s
+    } else {
+        0.0
+    };
     let rps_target_achieved_pct = rps_target.map(|target| {
-        if target > 0.0 { (started_rps / target) * 100.0 } else { 0.0 }
+        if target > 0.0 {
+            (started_rps / target) * 100.0
+        } else {
+            0.0
+        }
     });
-    let mbps_in = if elapsed_s > 0.0 { (bytes_in as f64 * 8.0) / (elapsed_s * 1_000_000.0) } else { 0.0 };
-    let mbps_out = if elapsed_s > 0.0 { (bytes_out as f64 * 8.0) / (elapsed_s * 1_000_000.0) } else { 0.0 };
+    let mbps_in = if elapsed_s > 0.0 {
+        (bytes_in as f64 * 8.0) / (elapsed_s * 1_000_000.0)
+    } else {
+        0.0
+    };
+    let mbps_out = if elapsed_s > 0.0 {
+        (bytes_out as f64 * 8.0) / (elapsed_s * 1_000_000.0)
+    } else {
+        0.0
+    };
 
     Ok(RunReport {
         proto,
