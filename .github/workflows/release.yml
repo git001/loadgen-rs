@@ -51,10 +51,6 @@ jobs:
             runner: ubuntu-latest
             use_cross: true
             archive_ext: tar
-          - target: x86_64-apple-darwin
-            runner: macos-13
-            use_cross: false
-            archive_ext: tar
           - target: aarch64-apple-darwin
             runner: macos-latest
             use_cross: false
