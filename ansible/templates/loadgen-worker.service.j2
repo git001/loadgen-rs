@@ -1,0 +1,20 @@
+[Unit]
+Description=loadgen-rs distributed worker-agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={{ deno_bin | default('deno') }} run \
+    --allow-ffi --allow-net --allow-read --allow-env \
+    {{ deploy_dir | default('/opt/loadgen') }}/ts/worker-agent.ts \
+    --listen {{ worker_listen | default('0.0.0.0') }}:{{ worker_port | default(9091) }} \
+    --lib {{ deploy_dir | default('/opt/loadgen') }}/libloadgen_ffi.so
+WorkingDirectory={{ deploy_dir | default('/opt/loadgen') }}
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=loadgen-worker
+
+[Install]
+WantedBy=multi-user.target

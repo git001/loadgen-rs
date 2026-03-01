@@ -1,0 +1,22 @@
+# Rust
+target/
+**/*.rs.bk
+
+# VSCode
+.vscode/
+
+# Claude
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+*.pem
+
+CLAUDE*
+blog-post.md
+
+*/:

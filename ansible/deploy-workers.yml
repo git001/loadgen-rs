@@ -1,0 +1,180 @@
+---
+# deploy-workers.yml — Deploy and start loadgen worker-agents on remote machines.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory.ini ansible/deploy-workers.yml
+#
+# Optional extra vars:
+#   -e lib_path=./target/release/libloadgen_ffi.so   (local path to .so)
+#   -e force_deno_install=true                        (reinstall deno even if present)
+#   -e rebuild=true                                   (rebuild .so before deploy)
+
+- name: Deploy loadgen worker-agents
+  hosts: workers
+  gather_facts: true
+  vars:
+    # lib_local_path is safe: it references lib_path (different name), not itself
+    lib_local_path: "{{ lib_path | default(playbook_dir + '/../target/release/libloadgen_ffi.so') }}"
+    # All other vars (deploy_dir, worker_port, deno_bin, etc.) come from
+    # inventory [workers:vars]. Override via -e or inventory, not here.
+    # Self-referencing defaults like "deno_bin: {{ deno_bin | default(...) }}"
+    # cause Ansible recursive template errors.
+
+  pre_tasks:
+    - name: Verify local .so exists
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.stat:
+        path: "{{ lib_local_path }}"
+      register: lib_stat
+
+    - name: Fail if .so not found
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.fail:
+        msg: >
+          {{ lib_local_path }} not found.
+          Run: cargo build --release -p loadgen-ffi
+      when: not lib_stat.stat.exists
+
+  tasks:
+    # --- Deno installation ---
+    - name: Check if deno is installed
+      ansible.builtin.command: "{{ deno_bin | default('deno') }} --version"
+      register: deno_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      become: true
+      when: deno_check.rc != 0 or (force_deno_install | default(false)) | bool
+
+    - name: Install unzip (required by deno installer)
+      ansible.builtin.package:
+        name: unzip
+        state: present
+      become: true
+      when: deno_check.rc != 0 or (force_deno_install | default(false)) | bool
+
+    - name: Install deno via official installer
+      ansible.builtin.shell: |
+        curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s "v{{ deno_version | default('2.7.1') }}"
+      args:
+        creates: /usr/local/bin/deno
+      become: true
+      when: deno_check.rc != 0 or (force_deno_install | default(false)) | bool
+
+    - name: Verify deno is available
+      ansible.builtin.command: "{{ deno_bin | default('deno') }} --version"
+      register: deno_version_out
+      changed_when: false
+
+    - name: Show deno version
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ deno_version_out.stdout_lines[0] }}"
+
+    # --- Deploy files ---
+    - name: Create deploy directory
+      ansible.builtin.file:
+        path: "{{ deploy_dir | default('/opt/loadgen') }}/ts"
+        state: directory
+        mode: "0755"
+      become: true
+
+    - name: Copy libloadgen_ffi.so
+      ansible.builtin.copy:
+        src: "{{ lib_local_path }}"
+        dest: "{{ deploy_dir | default('/opt/loadgen') }}/libloadgen_ffi.so"
+        mode: "0755"
+      notify: restart worker
+
+    - name: Copy TypeScript files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ deploy_dir | default('/opt/loadgen') }}/ts/{{ item | basename }}"
+        mode: "0644"
+      loop:
+        - "{{ playbook_dir }}/../ts/worker-agent.ts"
+        - "{{ playbook_dir }}/../ts/ffi.ts"
+        - "{{ playbook_dir }}/../ts/step_ffi.ts"
+        - "{{ playbook_dir }}/../ts/script_mode.ts"
+        - "{{ playbook_dir }}/../ts/types.ts"
+      notify: restart worker
+
+    # --- systemd service (if available) or screen/tmux fallback ---
+    - name: Check if systemd is available
+      ansible.builtin.command: systemctl --version
+      register: systemd_check
+      changed_when: false
+      failed_when: false
+
+    - name: Deploy systemd service unit
+      ansible.builtin.template:
+        src: loadgen-worker.service.j2
+        dest: "/etc/systemd/system/loadgen-worker.service"
+        mode: "0644"
+      become: true
+      when: systemd_check.rc == 0
+      notify: restart worker
+
+    - name: Enable and start worker service (systemd)
+      ansible.builtin.systemd:
+        name: loadgen-worker
+        enabled: true
+        state: started
+        daemon_reload: true
+      become: true
+      when: systemd_check.rc == 0
+
+    - name: Ensure tmux is installed (non-systemd fallback)
+      ansible.builtin.package:
+        name: tmux
+        state: present
+      become: true
+      when: systemd_check.rc != 0
+
+    - name: Start worker in tmux session (non-systemd fallback)
+      ansible.builtin.shell: |
+        # Kill existing tmux session for this worker if present
+        tmux kill-session -t "loadgen-{{ worker_port | default(9091) }}" 2>/dev/null || true
+        sleep 0.3
+        tmux new-session -d -s "loadgen-{{ worker_port | default(9091) }}" \
+          "{{ deno_bin | default('deno') }} run \
+            --allow-ffi --allow-net --allow-read --allow-env \
+            {{ deploy_dir | default('/opt/loadgen') }}/ts/worker-agent.ts \
+            --listen {{ worker_listen | default('0.0.0.0') }}:{{ worker_port | default(9091) }} \
+            --lib {{ deploy_dir | default('/opt/loadgen') }}/libloadgen_ffi.so \
+            2>&1 | tee {{ deploy_dir | default('/opt/loadgen') }}/worker-{{ worker_port | default(9091) }}.log"
+      when: systemd_check.rc != 0
+
+    - name: Show tmux session info
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: tmux session 'loadgen-{{ worker_port | default(9091) }}' started. Attach with: ssh {{ ansible_host | default(inventory_hostname) }} -t tmux attach -t loadgen-{{ worker_port | default(9091) }}"
+      when: systemd_check.rc != 0
+
+    # --- Health check ---
+    - name: Wait for worker to be ready
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host | default(inventory_hostname) }}:{{ worker_port | default(9091) }}/health"
+        return_content: true
+        status_code: 200
+      register: health
+      until: health.status == 200
+      retries: 10
+      delay: 1
+
+    - name: Show worker health
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} ({{ ansible_host | default(inventory_hostname) }}:{{ worker_port | default(9091) }}): {{ health.json }}"
+
+  handlers:
+    - name: restart worker
+      ansible.builtin.systemd:
+        name: loadgen-worker
+        state: restarted
+        daemon_reload: true
+      become: true
+      when: systemd_check.rc == 0

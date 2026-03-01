@@ -1,0 +1,7 @@
+{
+  "name": "@loadgen/core",
+  "exports": "./mod.ts",
+  "tasks": {
+    "check": "deno check ./mod.ts ./worker-agent.ts ../examples/simple.ts ../examples/correlation_mvp.ts ../examples/cookie_redirect_local_mvp.ts ../examples/native_step_skeleton.ts ../examples/distributed.ts ../examples/html-check.ts ../examples/roundcube-login.ts"
+  }
+}

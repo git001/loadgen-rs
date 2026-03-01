@@ -1,0 +1,44 @@
+---
+# stop-workers.yml — Stop loadgen worker-agents on remote machines.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory.ini ansible/stop-workers.yml
+
+- name: Stop loadgen worker-agents
+  hosts: workers
+  gather_facts: false
+  vars:
+    deploy_dir: "{{ deploy_dir | default('/opt/loadgen') }}"
+
+  tasks:
+    - name: Check if systemd is available
+      ansible.builtin.command: systemctl --version
+      register: systemd_check
+      changed_when: false
+      failed_when: false
+
+    - name: Stop worker service (systemd)
+      ansible.builtin.systemd:
+        name: loadgen-worker
+        state: stopped
+      become: true
+      when: systemd_check.rc == 0
+      failed_when: false
+
+    - name: Kill worker tmux session (non-systemd fallback)
+      ansible.builtin.shell: |
+        tmux kill-session -t "loadgen-{{ worker_port | default(9091) }}" 2>/dev/null || true
+      when: systemd_check.rc != 0
+
+    - name: Verify worker is stopped
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host | default(inventory_hostname) }}:{{ worker_port | default(9091) }}/health"
+        status_code: [-1, 502, 503]
+      register: health_check
+      failed_when: false
+
+    - name: Report status
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ 'stopped' if health_check.status != 200 else 'WARNING — still running!' }}

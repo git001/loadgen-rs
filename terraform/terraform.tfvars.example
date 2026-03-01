@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and adjust values
+hcloud_token = "your-hetzner-cloud-api-token"
+ssh_key_name = "my-ssh-key"
+
+# Optional: Adjust location and sizing
+# location     = "fsn1"      # fsn1 (Falkenstein), nbg1 (Nuremberg), hel1 (Helsinki)
+# worker_type  = "ccx23"     # ccx23: 8 vCPU/16GB, ccx33: 16 vCPU/32GB
+# worker_count = 2
+# worker_port  = 9091
+# deploy_dir   = "/opt/loadgen"
+# deno_version = "2.7.1"

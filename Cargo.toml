@@ -1,0 +1,70 @@
+[package]
+name = "loadgen-rs"
+version = "0.1.0"
+edition = "2024"
+description = "h2load-compatible HTTP benchmark client supporting HTTP/1.1, HTTP/2, and HTTP/3"
+
+[workspace]
+members = ["crates/loadgen-ffi"]
+
+[features]
+default = []
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# HTTP/1.1 + HTTP/2
+h2 = "0.4"
+http = "1"
+bytes = "1"
+httparse = "1"
+futures-util = "0.3"
+tokio-rustls = "0.26"
+
+# TLS
+rustls = { version = "0.23", default-features = false, features = ["std", "ring", "logging", "tls12"] }
+rustls-pemfile = "2"
+webpki-roots = "0.26"
+
+# HTTP/3 (QUIC)
+quinn = "0.11"
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Metrics
+hdrhistogram = "7"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1"
+libc = "0.2"
+
+# Allocator
+mimalloc = "0.1"
+socket2 = "0.6.2"
+
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Profiling: release-speed mit Debug-Symbolen für samply/perf
+[profile.profiling]
+inherits = "release"
+debug = 2
+strip = false
