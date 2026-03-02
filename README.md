@@ -3,6 +3,7 @@
 # loadgen-rs
 
 h2load-compatible HTTP benchmark client written in Rust, supporting HTTP/1.1, HTTP/2, and HTTP/3 (QUIC) with commandline mode and distributed mode.
+Blog post about [loadgen-rs: An HTTP Benchmark Client in Rust](https://blog.none.at/blog/2026/2026-03-01-loadgen-rs/).
 
 ## Quick Start
 
