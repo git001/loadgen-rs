@@ -1,6 +1,6 @@
 [package]
 name = "loadgen-rs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "h2load-compatible HTTP benchmark client supporting HTTP/1.1, HTTP/2, and HTTP/3"
 

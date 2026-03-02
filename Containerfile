@@ -1,6 +1,10 @@
 # === Builder Stage ===
 FROM docker.io/library/rust:1.93-bookworm AS builder
 
+LABEL org.opencontainers.image.source=https://github.com/git001/loadgen-rs
+LABEL org.opencontainers.image.description="Load generator written in Rust"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
+
 WORKDIR /build
 ARG RUSTFLAGS="-C target-cpu=native"
 ARG CARGO_FEATURES=""
@@ -62,6 +66,10 @@ RUN git clone --depth 1 --branch curl-8_18_0 https://github.com/curl/curl.git &&
 
 # === Runtime Stage ===
 FROM docker.io/library/debian:bookworm-slim
+
+LABEL org.opencontainers.image.source=https://github.com/git001/loadgen-rs
+LABEL org.opencontainers.image.description="Load generator written in Rust"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

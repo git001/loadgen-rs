@@ -1,6 +1,6 @@
 [package]
 name = "loadgen-ffi"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "C ABI wrapper for loadgen-rs"
 
