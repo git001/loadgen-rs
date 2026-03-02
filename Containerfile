@@ -10,7 +10,9 @@ ARG RUSTFLAGS="-C target-cpu=native"
 ARG CARGO_FEATURES=""
 ENV RUSTFLAGS="${RUSTFLAGS}"
 COPY Cargo.toml Cargo.lock ./
+COPY crates/loadgen-ffi/Cargo.toml crates/loadgen-ffi/Cargo.toml
 COPY src/ src/
+COPY crates/loadgen-ffi/src/ crates/loadgen-ffi/src/
 
 RUN cargo build --release && \
     strip target/release/loadgen-rs
